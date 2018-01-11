@@ -29,11 +29,11 @@ def build_graph(G, min_cost_flow, normalPatterns, tumorPatterns, start , end):
     for tumor in tumorPatterns:
         tumorSum += tumor.abundance
     
-    print("tumorSum = ", tumorSum)
+    #print("tumorSum = ", tumorSum)
     
     nRes = 100
     for normal in normalPatterns[:-1]:
-        print("normalCounts = ", normalCounts)
+        #print("normalCounts = ", normalCounts)
         #add edge btw source and normal patterns
         
         G.addEdge(0 , normal.getId(), (int(normal.abundance*100/normalSum), 0))
@@ -41,17 +41,17 @@ def build_graph(G, min_cost_flow, normalPatterns, tumorPatterns, start , end):
         #normal supplies for mcf
         min_cost_flow.SetNodeSupply(normal.getId(), 0)
         
-        print("Normalabundance = ", int(normal.abundance*100/normalSum))
-        print("normalIDs = ", normal.getId())
+        #print("Normalabundance = ", int(normal.abundance*100/normalSum))
+        #print("normalIDs = ", normal.getId())
         #tumorCounts = 0
         for tumor in tumorPatterns:
             #tumorCounts+=1
-            print("tumorCounts = ",tumorCounts)
+            #print("tumorCounts = ",tumorCounts)
             #print("normal mpat = ", normal)
             #print("tumor mpat = ", tumor)
             #add edge btw normal and tumor patterns
-            print("Tumor Abundance = ", int(tumor.abundance*100/tumorSum))
-            print("tumorIDs = ", tumor.getId())
+            #print("Tumor Abundance = ", int(tumor.abundance*100/tumorSum))
+            #print("tumorIDs = ", tumor.getId())
             G.addEdge(normal.getId(), tumor.getId(), (100, int(float(getJaccardDistance(normal, tumor, start, end))*100)))
 
 
@@ -60,7 +60,7 @@ def build_graph(G, min_cost_flow, normalPatterns, tumorPatterns, start , end):
     #normal supplies for mcf
     min_cost_flow.SetNodeSupply(normalPatterns[-1].getId(), 0)
     for tumor in tumorPatterns:
-        print("tumorCounts = ", tumorCounts)
+        #print("tumorCounts = ", tumorCounts)
         #add edge btw normal and tumor patterns
         G.addEdge(normalPatterns[-1].getId(), tumor.getId(), (100, int(float(getJaccardDistance(normalPatterns[-1], tumor, start, end))*100)))
 
@@ -72,29 +72,29 @@ def build_graph(G, min_cost_flow, normalPatterns, tumorPatterns, start , end):
         #add edge btw tumor patterns and sink
         tRes -= int(tumor.abundance*100/tumorSum)
         G.addEdge( tumor.getId(), normalCounts + tumorCounts + 1, (int(tumor.abundance*100/tumorSum), 0))
-        print("Tumorabundance = ", int(tumor.abundance*100/tumorSum))
-        print("tumorIDs = " , tumor.getId())
+        #print("Tumorabundance = ", int(tumor.abundance*100/tumorSum))
+        #print("tumorIDs = " , tumor.getId())
 
     G.addEdge( tumorPatterns[-1].getId(), normalCounts + tumorCounts + 1, (tRes, 0))
     
     
     
-    print("here 1")
-    print(G.getAllEdges())
+    #print("here 1")
+    #print(G.getAllEdges())
     if G.getAllEdges() == []:
         print("There is no Pattern in Selected Region")
     else:
         for x in G.getAllEdges():
             edge = G.getEdge(x[0],x[1])
             #print(x[0], " ----", x[1])
-            print( "capacity = ", edge[0], ", cost = ", edge[1])
+            #print( "capacity = ", edge[0], ", cost = ", edge[1])
             min_cost_flow.AddArcWithCapacityAndUnitCost(x[0], x[1], edge[0], edge[1])
 
 
-    print("here 2")
+    #print("here 2")
     
-    print("normalCounts = ", normalCounts)
-    print("tumorCounts = ", tumorCounts)
+    #print("normalCounts = ", normalCounts)
+    #print("tumorCounts = ", tumorCounts)
     min_cost_flow.SetNodeSupply( normalCounts + tumorCounts + 1, -100)
 
 
@@ -120,12 +120,12 @@ def run_mcf(normalSelectedPat, tumorSelectedPat, start , end):
     
     
     if min_cost_flow.Solve() == min_cost_flow.OPTIMAL:
-        print('winStart = ', start, '  winEnd = ', end)
-        print()
-        print('Total cost = ', min_cost_flow.OptimalCost())
-        print()
-        for i in range(min_cost_flow.NumArcs()):
-            print(min_cost_flow.Tail(i), min_cost_flow.Head(i), min_cost_flow.Flow(i))
+        #print('winStart = ', start, '  winEnd = ', end)
+        #print()
+        #print('Total cost = ', min_cost_flow.OptimalCost())
+        #print()
+        #for i in range(min_cost_flow.NumArcs()):
+        #    print(min_cost_flow.Tail(i), min_cost_flow.Head(i), min_cost_flow.Flow(i))
         return min_cost_flow.OptimalCost()
     else:
         print('winStart = ', start, '  winEnd = ', end)
@@ -181,20 +181,32 @@ def mcf_for_two(file1, file2, windowStart, windowEnd):
     return run_mcf(normalSelected, tumorSelected, windowStart, windowEnd)
 
 
+def compute_distance_matrix_sim(normal_rep_pat, tumor_rep_pat, windowStart, windowEnd):
+
+    normal_rep_size = len(normal_rep_pat)
+    tumor_rep_size = len(tumor_rep_pat)
+    distMat = numpy.zeros(shape=(normal_rep_size, tumor_rep_size))
+
+    for  i, normal in zip(range(normal_rep_size), normal_rep_pat):
+        for j, tumor in zip(range(tumor_rep_size), tumor_rep_pat):
+            distMat[i][j] = run_mcf(normal, tumor, windowStart, windowEnd)
+
+    return distMat
+
 
 def compute_distance_matrix(file1, file2, start, end):
     
     # Creates a list containing 5 lists, each of 8 items, all set to 0
     with open(file1) as f:
-        w =  sum(1 for _ in f)
+        normal_rep_size =  sum(1 for _ in f)
     with open(file2) as f:
-        h =  sum(1 for _ in f)
-    distMat = numpy.zeros(shape=(w,h))
+        tumor_rep_size =  sum(1 for _ in f)
+    distMat = numpy.zeros(shape=(normal_rep_size, tumor_rep_size))
 
     with open(file1,'rb') as fileN:
-        for i, Nline in zip(range(w), fileN):
+        for i, Nline in zip(range(normal_rep_size), fileN):
             with open(file2,'rb') as fileT:
-                for j, Tline in zip(range(h), fileT):
+                for j, Tline in zip(range(tumor_rep_size), fileT):
                     normalFile = str(Nline[0:]).strip()
                     tumorFile = str(Tline[0:]).strip()
                     print("normal file befor runForTwo = ", normalFile)

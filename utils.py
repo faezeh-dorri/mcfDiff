@@ -26,8 +26,11 @@ class methylPattern(object):
     
     
     def __str__(self):
-        return 'patId = ' + str(self.patId) + ' start =' + str(self.start) + ' mPat = ' + str(self.mPat)
+        return 'patId = ' + str(self.patId) + ' start =' + str(self.start) + ' mPat = ' + str(self.mPat) + ' abd = ' + str(self.abundance)
     
+    def __eq__(self, other):
+        return (self.start == other.start) and (self.end == other.end) and (self.mPat == other.mPat)
+
     def setId(self, vertId):
         self.patId = vertId
     
@@ -178,14 +181,14 @@ def isInList(cid, compList):
     return False
 
 def getComponentList(patterns):
-    uniqueCidList = []
+    unique_comp_list = []
     for pat in patterns:
-        if not isInList(pat.cid, uniqueCidList):
+        if not isInList(pat.cid, unique_comp_list):
             compRange = findComponentRange(patterns, pat.cid)
             cidComp = Component(pat.cid, compRange.start,compRange.end )
-            uniqueCidList.append(cidComp)
+            unique_comp_list.append(cidComp)
             print( "cid = ", cidComp.cid, cidComp.start, cidComp.end, " is added to unique list" )
-    return uniqueCidList
+    return unique_comp_list
 
 
 
