@@ -9,8 +9,8 @@ from utils import *
 def simulate(patterns, rep_size, is_DMR):
 	normal_rep_pat = make_normal_replicate(patterns, rep_size)
 	thr = 0.15
-	DMR_change_param = 0.8
-	replicate_change_param = 0.02
+	DMR_change_param = 0.9
+	replicate_change_param = 0.03
 
 
 	if is_DMR == 1:
