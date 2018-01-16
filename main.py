@@ -4,14 +4,20 @@ from __future__ import print_function
 import csv
 import sys, getopt
 import numpy
+import random
+import sklearn
+
+from sklearn.metrics import roc_auc_score
 
 
 from ortools.graph import pywrapgraph
 from apgl.graph import *
 
-from mcflib import find_overal_intersect
-from mcflib import compute_distance_matrix
 
+from mcflib import find_overal_intersect
+from mcflib import compute_distance_matrix, compute_distance_matrix_sim
+from simulation import simulate
+from utils import *
 
 
 def is_valid_file(parser, arg):
@@ -44,7 +50,16 @@ def get_parser():
     
     #subparsers = parser.add_subparsers()
     
-    
+    parser.add_argument("-run", "--run",
+                        dest="run",
+                        default=0,
+                        type=int,
+                        help="define type of process: simulation(0) or realdata(1) (sim/real)")
+    parser.add_argument("-rep_size", "--rep_size", "-repSize",
+                        dest="rep_size",
+                        default=3,
+                        type=int,
+                        help="Number of replicate within each group for simulation run")
     parser.add_argument("-start", "--start",
                         dest="start",
                         default=10,
@@ -95,17 +110,92 @@ if __name__ == "__main__":
     open(outputDir, 'w').close()
     
     print(result_args.start, result_args.end, result_args.step, inputFileDirNormal, inputFileDirTumor, outputDir)
+    run_type = result_args.run
 
-    overalCompList = find_overal_intersect(inputFileDirNormal, inputFileDirTumor, result_args.start, result_args.end)
+    if run_type == 0:
+        print("simulation start")
+        fileN = open(inputFileDirNormal,'rb')
+        line = fileN.readline()
+        patterns = read_methyl_patterns(str(line).strip())
+        print(" patterns length = ", len(patterns))
+        selectedPatterns = within_region_patterns(patterns, result_args.start, result_args.end)
+        print("selected pattern len = ", len(selectedPatterns))
+        componentList = getComponentList(selectedPatterns)
+        print(" comp list length = ", len(componentList))
 
-    for comp in overalCompList:
-        distMat = compute_distance_matrix(inputFileDirNormal,  inputFileDirTumor, comp.start, comp.end)
-        with file(outputDir, 'a+') as outfile:
-            outfile.write('component ' + str(comp.cid)+ ' = (' + str(comp.start)+ ', ' + str(comp.end) + ')\n')
-            numpy.savetxt(outfile, distMat, fmt='%1.0f')
-            outfile.write('-----------------\n')
+        is_DMR_array = []
+        dist_mean_array = []
+
+        for comp in componentList:
+            normalSelected = within_region_patterns(selectedPatterns, comp.start, comp.end)
+
+            #rand = random.randint(0,101)
+            rand = random.random()
+
+            if rand < 0.50:
+                is_DMR = 1
+            else:
+                is_DMR = 0
+
+            normal_rep_pats, tumor_rep_pats = simulate(normalSelected, result_args.rep_size, is_DMR)
+
+
+          #  with open(inputFileDirTumor,'rb') as fileT:
+           #     for file_name, tumor_list in zip(fileT, tumor_rep_pat):
+            #         with open(file_name, 'w') as f:
+             #           for _string in tumor_list:
+              #              f.write(str(_string) + '\n')
+
+            distMat = compute_distance_matrix_sim(normal_rep_pats, tumor_rep_pats, comp.start, comp.end)
+
+
+            dist_mean = distMat.mean()
+            print("is_DMAR = " + str(is_DMR) + " , " + str(dist_mean))
+            dist_mean_array.append(dist_mean)
+            is_DMR_array.append(is_DMR)
+                         
+            with file(outputDir, 'a+') as outfile:
+                outfile.write('component ' + str(comp.cid)+ ' = (' + str(comp.start)+ ', ' + str(comp.end) + ')\n')
+                for pat in normalSelected:
+                    outfile.write(str(pat)+'\n')
+                if is_DMR == 1:
+                    outfile.write('DMR component\n')
+                else:
+                    outfile.write('none-DMR component\n')
+                numpy.savetxt(outfile, distMat, fmt='%1.0f')
+                for norm_rep in normal_rep_pats:
+                    for pat in norm_rep:
+                        outfile.write(str(pat)+'\n')
+                    outfile.write('-----------------\n')
+
+
+                outfile.write('-----------------\n')
+
+
+                for tumor_rep in tumor_rep_pats:
+                    for pat in tumor_rep:
+                        outfile.write(str(pat)+'\n')
+                    outfile.write('-----------------\n')
+
+                        
+                outfile.write('-----------------\n')  
+                outfile.write('-----------------\n')
+
+        auc = sklearn.metrics.roc_auc_score(is_DMR_array, dist_mean_array)
+        print(auc)
+
+                    
+    else:
+        overalCompList = find_overal_intersect(inputFileDirNormal, inputFileDirTumor, result_args.start, result_args.end)
+
+        for comp in overalCompList:
+            distMat = compute_distance_matrix(inputFileDirNormal,  inputFileDirTumor, comp.start, comp.end)
+            with file(outputDir, 'a+') as outfile:
+                outfile.write('component ' + str(comp.cid)+ ' = (' + str(comp.start)+ ', ' + str(comp.end) + ')\n')
+                numpy.savetxt(outfile, distMat, fmt='%1.0f')
+                outfile.write('-----------------\n')
 
 
 
-    print("comp List size = ", len(overalCompList))
+        print("comp List size = ", len(overalCompList))
 
