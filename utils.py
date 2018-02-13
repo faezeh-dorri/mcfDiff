@@ -141,7 +141,7 @@ def read_methyl_patterns(fileName):
     methylPatterns = []
     patId =0
     # 0 = chr, 1 = start, 2 = end, 3 = cid, 4 = pid, 5 = abundance, 6 = methylpat, 7 = regions , 8 = group
-    with open(fileName,'rb') as tsvin:
+    with open(fileName,'r') as tsvin:
         tsvin=csv.reader(tsvin,delimiter='\t')
         next(tsvin)
         for row in tsvin:
