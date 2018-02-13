@@ -6,21 +6,20 @@ from utils import *
 
 
 
-def simulate(patterns, rep_size, is_DMR):
-	normal_rep_pat = make_normal_replicate(patterns, rep_size)
-	thr = 0.15
-	DMR_change_param = 0.9
-	replicate_change_param = 0.03
+def simulate(patterns, rep_size, is_DMR, thr, DMR_change_param, replicate_change_param):
 
+	case, abundance_tag = choose_high_abundant_pattern(patterns, thr)
+
+	normal_rep_pat = make_normal_replicate(patterns, rep_size, replicate_change_param)
 
 	if is_DMR == 1:
 	#DMR region
 		DMR_pat = make_DMR_patterns(patterns, thr,  DMR_change_param, replicate_change_param)
-		tumor_rep_pat = make_normal_replicate(DMR_pat, rep_size)
+		tumor_rep_pat = make_normal_replicate(DMR_pat, rep_size, replicate_change_param)
 
 	if is_DMR == 0: 
 	#non_DMR region
-		tumor_rep_pat = make_normal_replicate(patterns, rep_size)
+		tumor_rep_pat = make_normal_replicate(patterns, rep_size, replicate_change_param)
 	
 	prune_normal_rep_pat = []
 	for pats in normal_rep_pat:
@@ -33,7 +32,7 @@ def simulate(patterns, rep_size, is_DMR):
 		prune_tumor_rep_pat.append(prune_pats)
 
 
-	return prune_normal_rep_pat, prune_tumor_rep_pat
+	return prune_normal_rep_pat, prune_tumor_rep_pat, case
 
 
 def prune_patterns(patterns):
@@ -49,27 +48,27 @@ def prune_patterns(patterns):
 			result.append(pat)
 	return result
 
-def make_one_normal_replicate(pat, replicate_array):
+def make_one_normal_replicate(pat, replicate_array, replicate_change_param):
 	rand = random.random()
 	if rand < 0.5:
-		replicate_patterns = make_replicate(pat, 0.02,  0.03, 1)
+		replicate_patterns = make_replicate(pat, replicate_change_param,  replicate_change_param, 1)
 		for replicate_pattern in replicate_patterns:
 			replicate_array.append(replicate_pattern)
 	else:
-		replicate_patterns = make_replicate(pat, 0.02,  0.03, 0.8)
+		replicate_patterns = make_replicate(pat, replicate_change_param,  replicate_change_param, 0.8)
 		for replicate_pattern in replicate_patterns:
 			replicate_array.append(replicate_pattern)
 	return replicate_array
 
 
 
-def make_normal_replicate(normal_pat, rep_size):
+def make_normal_replicate(normal_pat, rep_size, replicate_change_param):
 	normal_patterns = []
 
 	for i in range(rep_size):
 		one_replicate = []
 		for pat in normal_pat:
-			one_replicate = make_one_normal_replicate(pat, one_replicate)
+			one_replicate = make_one_normal_replicate(pat, one_replicate, replicate_change_param)
 
 		normal_patterns.append(one_replicate)
 
@@ -168,13 +167,16 @@ def make_DMR_patterns(normal_pat, thr,  DMR_change_param, replicate_change_param
 		if tag == 'high':
 			high_abundant_count += 1
 
-	max_change_count = high_abundant_count / 2
+	if case == 'hard':
+		max_change_count = high_abundant_count / 3
+	else:
+		max_change_count = high_abundant_count / 2
 	change_count = 0
 	remaining_change_count = high_abundant_count
 
 	for pat, tag in zip(normal_pat, abundance_tag):
 		if tag == 'low':
-			DMR_pat = make_one_normal_replicate(pat, DMR_pat)
+			DMR_pat = make_one_normal_replicate(pat, DMR_pat, replicate_change_param)
 
 		else: # tag == 'high'
 			if case == 'simple':
@@ -208,7 +210,7 @@ def make_DMR_patterns(normal_pat, thr,  DMR_change_param, replicate_change_param
 							DMR_pat.append(pattern)
 				else:
 					remaining_change_count -= 1
-					DMR_pat = make_one_normal_replicate(pat, DMR_pat)
+					DMR_pat = make_one_normal_replicate(pat, DMR_pat, replicate_change_param)
 	return DMR_pat
 
 
