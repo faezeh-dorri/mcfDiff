@@ -1,7 +1,7 @@
 
 #!/usr/bin/env python
 from __future__ import print_function
-import csv
+import csv, os
 import sys, getopt
 import numpy 
 import random
@@ -113,7 +113,7 @@ def get_parser():
 
 #parser.add_argument("-q", "--quiet",action="store_false",dest="verbose",default=True,help="don't print status messages to stdout")
     return parser
-def patterns_2_p_values(selectedPatterns, componentList, output_file_info, output_file_health_status, output_file_p_value, output_file_extended_dist_mat, output_file_auc, output_file_MiRKAT):
+def patterns_2_p_values(selectedPatterns, componentList,full_filename_sim, output_file_info, output_file_health_status, output_file_p_value, output_file_extended_dist_mat, output_file_auc, output_file_MiRKAT):
     auc_all_list = []
     auc_simple_list =[]
     auc_moderate_list = []
@@ -184,7 +184,7 @@ def patterns_2_p_values(selectedPatterns, componentList, output_file_info, outpu
 
 
         args =[output_file_extended_dist_mat_single, output_file_health_status, output_file_info, output_file_p_value]
-        cmd = ["Rscript", "/Users/faezeh/Projects/mcfDiff/MiRKAT_p_value.r"] + args
+        cmd = ["Rscript", full_filename_sim] + args
         sp.call(cmd)
         
 
@@ -263,7 +263,7 @@ def patterns_2_p_values(selectedPatterns, componentList, output_file_info, outpu
     
 
 
-def evaluate_param_effect(selectedPatterns, componentList, method, output_file_auc_eval):
+def evaluate_param_effect(selectedPatterns, componentList,full_filename_sim, method, output_file_auc_eval):
     random_iteration = 20
 
     thr_list = [0.15]
@@ -329,7 +329,7 @@ def evaluate_param_effect(selectedPatterns, componentList, method, output_file_a
 
 
                                 args =[output_file_extended_dist_mat_single, output_file_health_status, output_file_info, output_file_p_value, output_file_single_p_value]
-                                cmd = ["Rscript", "/Users/faezeh/Projects/mcfDiff/MiRKAT_p_value.r"] + args
+                                cmd = ["Rscript", full_filename_sim] + args
                                 sp.call(cmd)
 
                                 single_p_value = open(output_file_single_p_value, 'r').readline().rstrip()
@@ -345,8 +345,9 @@ def evaluate_param_effect(selectedPatterns, componentList, method, output_file_a
                                 #print("ttest_tscore = " + str(ttest_tscore))
                                 print("ttest_pvalue = " + str(2*ttest_pvalue))
 
-                                score = 1 - 2*ttest_pvalue
+                                #score = 1 - 2*ttest_pvalue
                                 #score = abs(ttest_tscore)
+                                score = ttest_pvalue
 
 
                             else:
@@ -477,6 +478,18 @@ if __name__ == "__main__":
     output_file_MiRKAT = result_args.outputfileDir + '/MiRKAT_p_value.txt'
 
 
+    fileDir = os.path.dirname(os.path.realpath('__file__'))
+    print(fileDir)
+
+    #For accessing the file in the same folder
+    filename_MiRKAT_sim = "MiRKAT_p_value.r"
+    filename_MiRKAT_real = "MiRKAT_p_value_real.r"
+
+    #readFile(filename)
+
+    #For accessing the file in a folder contained in the current folder
+    full_filename_sim = os.path.join(fileDir, filename_MiRKAT_sim)
+    full_filename_real = os.path.join(fileDir, filename_MiRKAT_real)
 
 
     open(output_file_auc, 'w').close()
@@ -504,10 +517,10 @@ if __name__ == "__main__":
         print(" comp list length = ", len(componentList))
 
         if eval_type == False:
-            patterns_2_p_values(selectedPatterns, componentList, output_file_info, output_file_health_status, output_file_p_value, output_file_extended_dist_mat, output_file_auc, output_file_MiRKAT)
+            patterns_2_p_values(selectedPatterns, componentList, full_filename_sim, output_file_info, output_file_health_status, output_file_p_value, output_file_extended_dist_mat, output_file_auc, output_file_MiRKAT)
 
         if eval_type == True:
-            evaluate_param_effect(selectedPatterns, componentList, method, output_file_auc_eval)
+            evaluate_param_effect(selectedPatterns, componentList, full_filename_sim, method, output_file_auc_eval)
     
     else:
         overalCompList = find_overal_intersect(inputFileDirNormal, inputFileDirTumor, result_args.start, result_args.end)
@@ -536,7 +549,7 @@ if __name__ == "__main__":
 
 
             args =[output_file_extended_dist_mat_single, output_file_health_status, output_file_p_value, output_file_single_p_value]
-            cmd = ["Rscript", "/Users/faezeh/Projects/mcfDiff/MiRKAT_p_value_real.r"] + args
+            cmd = ["Rscript", full_filename_real] + args
             sp.call(cmd)
 
 
@@ -546,7 +559,8 @@ if __name__ == "__main__":
             #print("ttest_tscore = " + str(ttest_tscore))
             print("ttest_pvalue = " + str(2*ttest_pvalue))
 
-            score = 1 - 2*ttest_pvalue
+            #score = 1 - 2*ttest_pvalue
+            score = ttest_pvalue
             score_list.append(score)
             
         all = []
@@ -561,7 +575,7 @@ if __name__ == "__main__":
 
 
         with open(output_file, 'w') as outfile:
-            outfile.write('pvalue_MiRKAT\tttest_value\tcompStart\tcompEnd\n')
+            outfile.write('pvalue_MiRKAT\tttest_pvalue\tcompStart\tcompEnd\n')
             for line in all:
                 outfile.write(str(line)+'\n')
             
