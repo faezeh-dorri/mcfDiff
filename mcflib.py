@@ -267,8 +267,8 @@ def compute_extended_distance_matrix_sim(normal_rep_pat, tumor_rep_pat, windowSt
     normal_rep_size = len(normal_rep_pat)
     tumor_rep_size = len(tumor_rep_pat)
 
-    print("normal_rep_size = " +str(normal_rep_size))
-    print("tumor_rep_size = " +str(tumor_rep_size))
+    #print("normal_rep_size = " +str(normal_rep_size))
+    #print("tumor_rep_size = " +str(tumor_rep_size))
 
     distMat = np.zeros(shape=(normal_rep_size + tumor_rep_size, normal_rep_size + tumor_rep_size))
     normal_id_array = []
@@ -348,9 +348,11 @@ def write_DMR_status(is_DMR, case, output_file):
      f.write(str(is_DMR) + '\t' + str(case))
      f.close()
 
-def write_auc_pvalue_MiRKAT(auc_pvalue_MiRKAT, type_I_error, type_II_error, output_file):
-    f = open(output_file,'w') 
-    f.write("auc_pvalue_MiRKAT = " + str(auc_pvalue_MiRKAT) + '\n' + "type_I_error = " + str(type_I_error)+ '\n' + "type_II_error = " +  str(type_II_error))
+def write_auc_pvalue_MiRKAT(auc_pvalue, type_I_error, type_II_error, sensitivity, specificity, output_file):
+    f = open(output_file,'a+') 
+    f.write(str(auc_pvalue) + '\t' + str(type_I_error)+ '\t' +  str(type_II_error) + '\t')
+    f.write(str(sensitivity) + '\t' + str(specificity)+ '\n' )
+    
     f.close()
 
 def compute_extended_distance_matrix_from_file(file1, file2, start, end):
@@ -471,8 +473,8 @@ def compute_distance_matrix(file1, file2, start, end):
                 for j, Tline in zip(range(tumor_rep_size), fileT):
                     normalFile = str(Nline[0:]).strip()
                     tumorFile = str(Tline[0:]).strip()
-                    print("normal file befor runForTwo = ", normalFile)
-                    print("tumor file befor runForTwo = ", tumorFile)
+                    #print("normal file befor runForTwo = ", normalFile)
+                    #print("tumor file befor runForTwo = ", tumorFile)
                         
                     distMat[i][j] = mcf_for_two(str(Nline[0:]).strip(), str(Tline[0:]).strip(), start, end)
     return distMat

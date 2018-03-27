@@ -4,10 +4,17 @@ from __future__ import print_function
 import csv, os
 import sys, getopt
 import numpy 
+import pylab
 import random
 import sklearn
 import subprocess as sp
 from scipy import stats
+
+from sklearn.manifold import MDS
+from sklearn.metrics import euclidean_distances
+from sklearn.datasets import make_classification
+import matplotlib.pyplot as plt
+
 
 
 
@@ -24,6 +31,7 @@ from mcflib import compute_distance_matrix, compute_distance_matrix_sim
 from simulation import simulate
 from utils import *
 from pandas import DataFrame
+
 
 
 def is_valid_file(parser, arg):
@@ -45,6 +53,13 @@ def is_valid_file(parser, arg):
     else:
         return arg
 
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def get_parser():
     import argparse
@@ -64,7 +79,7 @@ def get_parser():
     parser.add_argument("-eval", "--eval",
                         dest="eval",
                         default=False,
-                        type=bool,
+                        type=str,
                         help="define type of process: evaluate_param_effect (true/False) ")
     parser.add_argument("-method", "--method",
                         dest="method",
@@ -88,12 +103,12 @@ def get_parser():
                         help="end position of process")
     parser.add_argument("-step", "--step",
                         dest="step",
-                        default=100,
+                        default=500,
                         type=int,
                         help="moving window step size")
     parser.add_argument("-w", "--w",
                         dest="windowSize",
-                        default=500,
+                        default=5000,
                         type=int,
                         help="window size")
     parser.add_argument("-i1", "--i1",
@@ -114,161 +129,306 @@ def get_parser():
 #parser.add_argument("-q", "--quiet",action="store_false",dest="verbose",default=True,help="don't print status messages to stdout")
     return parser
 def patterns_2_p_values(selectedPatterns, componentList,full_filename_sim, output_file_info, output_file_health_status, output_file_p_value, output_file_extended_dist_mat, output_file_auc, output_file_MiRKAT):
-    auc_all_list = []
-    auc_simple_list =[]
-    auc_moderate_list = []
-    auc_hard_list = []
+    random_iteration = 10
 
     thr = 0.15
     DMR_change_param = 0.8
-    replicate_change_param = 0.03
-    rep_size = result_args.rep_size
+    replicate_change_param = 0.02
+    rep_size_list = [10]
+    #rep_size = result_args.rep_size
 
-    is_DMR_array_all = []
-    dist_mean_array_all = []
-    case_array_all = []
+    for rep_size  in rep_size_list:
 
-    is_DMR_array_simple = []
-    dist_mean_array_simple = []
+        auc_all_list = []
+        auc_simple_list =[]
+        auc_moderate_list = []
+        auc_hard_list = []
 
-    is_DMR_array_moderate = []
-    dist_mean_array_moderate = []
+        
+        ii = 0
+        for iter in range(random_iteration):
+            is_DMR_array_all = []
+            dist_mean_array_all = []
+            case_array_all = []
 
-    is_DMR_array_hard = []
-    dist_mean_array_hard = []
+            is_DMR_array_simple = []
+            dist_mean_array_simple = []
 
-    for comp in componentList:
-        normalSelected = within_region_patterns(selectedPatterns, comp.start, comp.end)
+            is_DMR_array_moderate = []
+            dist_mean_array_moderate = []
 
-        #rand = random.randint(0,101)
-        rand = random.random()
+            is_DMR_array_hard = []
+            dist_mean_array_hard = []
 
-        if rand < 0.50:
-            is_DMR = 1
-        else:
-            is_DMR = 0
+            for comp in componentList:
+                ii += 1
+                print("iter = ", ii)
+                print("len of comPList  = ", len(componentList))
+                normalSelected = within_region_patterns(selectedPatterns, comp.start, comp.end)
 
-        normal_rep_pats, tumor_rep_pats, case = simulate(normalSelected, rep_size, is_DMR, thr, DMR_change_param, replicate_change_param)
+                #rand = random.randint(0,101)
+                rand = random.random()
 
-        distMat = compute_distance_matrix_sim(normal_rep_pats, tumor_rep_pats, comp.start, comp.end)
-        dist_mean = distMat.mean()
+                if rand < 0.50:
+                    is_DMR = 1
+                else:
+                    is_DMR = 0
 
-        dist_mean_array_all.append(dist_mean)
-        is_DMR_array_all.append(is_DMR)
-        case_array_all.append(case)
+                normal_rep_pats, tumor_rep_pats, case = simulate(normalSelected, rep_size, is_DMR, thr, DMR_change_param, replicate_change_param)
 
-        if case == 'simple':
-            dist_mean_array_simple.append(dist_mean)
-            is_DMR_array_simple.append(is_DMR)
-        else: 
-            if case == 'moderate':
-                dist_mean_array_moderate.append(dist_mean)
-                is_DMR_array_moderate.append(is_DMR)
+                
+                print("data is simulated")
+
+                if method == 'MiRKAT':
+                    extended_dist_mat, id_array_b = compute_extended_distance_matrix_sim(normal_rep_pats, tumor_rep_pats, comp.start, comp.end)
+                    write_extended_dis_mat(normal_rep_pats, tumor_rep_pats, extended_dist_mat, comp, is_DMR, case, output_file_extended_dist_mat)
+
+                    open(output_file_extended_dist_mat_single, 'w').close()
+                    open(output_file_health_status, 'w').close()
+                    open(output_file_info, 'w').close()
+
+                    #print(extended_dist_mat)
+                    write_single_dist_mat(extended_dist_mat, output_file_extended_dist_mat_single)
+                    write_health_status(id_array_b, output_file_health_status)
+                    write_DMR_status(is_DMR, case, output_file_info)
+
+
+                    args =[output_file_extended_dist_mat_single, output_file_health_status, output_file_info, output_file_p_value, output_file_single_p_value]
+                    cmd = ["Rscript", full_filename_sim] + args
+                    sp.call(cmd)
+
+                    single_p_value = open(output_file_single_p_value, 'r').readline().rstrip()
+
+                    #print("MiRKAT_p_ value = " + str(single_p_value))
+                    score = single_p_value
+
+
+
+                if method == 'ttest':
+                    print("method = ttest")
+                    extended_dist_mat, id_array_b = compute_extended_distance_matrix_sim(normal_rep_pats, tumor_rep_pats, comp.start, comp.end)
+                    n_n_array, t_t_array, n_t_array = extended_dist_mat_2_distributions(extended_dist_mat, len(normal_rep_pats), len(tumor_rep_pats))
+                    
+                    data = [n_n_array, n_t_array, t_t_array]
+                    #fig = plt.figure()
+                    #plt.boxplot(data)
+
+                    #plt.show()
+                    #fig.savefig(output_file_dir)
+
+                    print("boxplot Done")
+                    ttest_tscore, ttest_pvalue= stats.ttest_ind(n_n_array, n_t_array)
+
+
+
+                    nn_mean = numpy.mean(numpy.array(n_n_array))
+                    nn_sd = numpy.std(numpy.array(n_n_array))
+
+                    nt_mean = numpy.mean(numpy.array(n_t_array))
+                    nt_sd = numpy.std(numpy.array(n_t_array))
+
+                    tt_mean = numpy.mean(numpy.array(t_t_array))
+                    tt_sd = numpy.std(numpy.array(t_t_array))
+
+                    print(" mean and var is computed!")
+                    #print("ttest_tscore = " + str(ttest_tscore))
+                    #print("ttest_pvalue = " + str(2*ttest_pvalue))
+#This is a two-sided test for the null hypothesis that 2 independent samples have identical average (expected) values. 
+#This test assumes that the populations have identical variances by default.
+
+                    #score = 1 - 2*ttest_pvalue
+                    #score = abs(ttest_tscore)
+                    print(extended_dist_mat)
+                    
+                    mds = sklearn.manifold.MDS( n_components=2, max_iter=300, eps=10e-6, dissimilarity='precomputed' )
+                    #mds = sklearn.manifold.MDS( n_components=2, random_state=6, dissimilarity='precomputed' )
+                    mat_size = len(extended_dist_mat.index.values)
+                    labels = extended_dist_mat.index.values
+                    distance_Mat = numpy.zeros(shape=(mat_size, mat_size))
+
+                    for  i , ind1 in zip(range(mat_size),extended_dist_mat.index.values):
+                        for  j , ind2 in zip(range(mat_size),extended_dist_mat.index.values):
+                            distance_Mat[i][j] = extended_dist_mat.loc[ind1,ind2]
+
+
+                    coords = mds.fit( distance_Mat ).embedding_
+
+                    plt.scatter( coords[:,0], coords[:,1] )
+                    print("DMR is = " + str(is_DMR))
+                    for label, x, y in zip(labels, coords[:, 0], coords[:, 1]):
+                        print(label, x , y)
+
+
+                        plt.annotate(label, xy = (x, y), xytext = (-20, 20), textcoords = 'offset points',
+                            ha = 'right', va = 'bottom',
+                            bbox = dict(boxstyle = 'round,pad=0.5', fc = 'yellow', alpha = 0.5),
+                            arrowprops = dict(arrowstyle = '->', connectionstyle = 'arc3,rad=0'))
+
+                    plt.show()
+                    
+                    #plt.savefig( output_file_dir, format = png)
+                    print("MDS is DONE")
+                    '''data, labels = make_classification()
+                    mds = MDS(n_components=2)
+
+                    similarities = euclidean_distances(data.astype(numpy.float64))
+                    print numpy.abs(similarities - similarities.T).max()
+                    # Prints 1.7763568394e-15
+                    mds.fit(data.astype(numpy.float64))
+                    # Succeeds
+
+                    similarities = euclidean_distances(data.astype(numpy.float32))
+                    print numpy.abs(similarities - similarities.T).max()
+                    # Prints 9.53674e-07
+                    mds.fit(data.astype(numpy.float32))'''
+
+
+
+                    score = ttest_pvalue
+                    print("p-value is computed")
+                    with open(output_file_p_value, 'a+') as outfile_pval:
+                        outfile_pval.write(str(score) + '\t' + str(is_DMR) + '\t' + str(case) + '\n')
+
+
+                else:
+                    distMat = compute_distance_matrix_sim(normal_rep_pats, tumor_rep_pats, comp.start, comp.end)
+                    score = distMat.mean()
+                    with open(output_file_p_value, 'a+') as outfile_pval:
+                        outfile_pval.write(str(score) + '\t' + str(is_DMR) + '\t' + str(case) + '\n')
+
+                
+                dist_mean_array_all.append(score)
+                is_DMR_array_all.append(is_DMR)
+                case_array_all.append(case)
+
+                if case == 'simple':
+                    dist_mean_array_simple.append(score)
+                    is_DMR_array_simple.append(is_DMR)
+                else: 
+                    if case == 'moderate':
+                        dist_mean_array_moderate.append(score)
+                        is_DMR_array_moderate.append(is_DMR)
+                    else:
+                        dist_mean_array_hard.append(score)
+                        is_DMR_array_hard.append(is_DMR)
+
+
+                
+
+            '''if len(is_DMR_array_all) >= 2:
+                auc_all = sklearn.metrics.roc_auc_score(is_DMR_array_all, dist_mean_array_all)
+                auc_all_list.append(auc_all)
             else:
-                dist_mean_array_hard.append(dist_mean)
-                is_DMR_array_hard.append(is_DMR)
+                auc_all = 'NA'
+
+            if len(is_DMR_array_simple) >= 2:
+                auc_simple = sklearn.metrics.roc_auc_score(is_DMR_array_simple, dist_mean_array_simple)
+                auc_simple_list.append(auc_simple)
+            else:
+                auc_simple = 'NA'
+
+            if len(is_DMR_array_moderate) >= 2:
+                auc_moderate = sklearn.metrics.roc_auc_score(is_DMR_array_moderate, dist_mean_array_moderate)
+                auc_moderate_list.append(auc_moderate)
+            else:
+                auc_moderate = 'NA'
+
+            if len(is_DMR_array_hard) >= 2:
+                auc_hard = sklearn.metrics.roc_auc_score(is_DMR_array_hard, dist_mean_array_hard)
+                auc_hard_list.append(auc_hard)
+            else:
+                auc_hard = 'NA'
+                '''
 
 
+            pvalue_data = numpy.genfromtxt(output_file_p_value, delimiter="\t")
+            pvalues = pvalue_data[:,0]
+            #pvalue_MMiRKAT = pvalue_data[:,1]
+            #labels = 1 - pvalue_data[:,2]
 
-        extended_dist_mat, id_array_b = compute_extended_distance_matrix_sim(normal_rep_pats, tumor_rep_pats, comp.start, comp.end)
-        write_extended_dis_mat(normal_rep_pats, tumor_rep_pats, extended_dist_mat, comp, is_DMR, case, output_file_extended_dist_mat)
+            labels = pvalue_data[:,1]
+            significance_level = 0.02
+            auc_pvalue = sklearn.metrics.roc_auc_score(labels, pvalues)
+            #auc_pvalue_MMiRKAT = sklearn.metrics.roc_auc_score(labels, pvalue_MMiRKAT)
 
-        open(output_file_extended_dist_mat_single, 'w').close()
-        open(output_file_health_status, 'w').close()
-        open(output_file_info, 'w').close()
+            total_number_of_regions = len(pvalues)
+            type_I = 0
+            type_II = 0
+            TP = 0
+            TN = 0
+            P = 0
+            N = 0
+            for pval, lab  in zip(pvalues, labels):
+                if pval <= significance_level:
+                    P +=1
+                    if lab == 0:
+                        type_I += 1
+                    if lab == 1:
+                        TP += 1
+                if pval > significance_level:
+                    N += 1
+                    if lab == 1:
+                        type_II +=1
+                    if lab == 0:
+                        TN += 1
+            average_type_I_error = float(type_I) / float(total_number_of_regions)
+            average_type_II_error = float(type_II) / float(total_number_of_regions)
+            sensitivity = float(TP) / float(P)
+            speicificity = float(TN)/float(N)
 
-        #print(extended_dist_mat)
-        write_single_dist_mat(extended_dist_mat, output_file_extended_dist_mat_single)
-        write_health_status(id_array_b, output_file_health_status)
-        write_DMR_status(is_DMR, case, output_file_info)
 
-
-        args =[output_file_extended_dist_mat_single, output_file_health_status, output_file_info, output_file_p_value]
-        cmd = ["Rscript", full_filename_sim] + args
-        sp.call(cmd)
+            write_auc_pvalue_MiRKAT(auc_pvalue, average_type_I_error, average_type_II_error, sensitivity, speicificity, output_file_MiRKAT)
         
 
-    if len(is_DMR_array_all) >= 2:
-        auc_all = sklearn.metrics.roc_auc_score(is_DMR_array_all, dist_mean_array_all)
-        auc_all_list.append(auc_all)
-    else:
-        auc_all = 'NA'
+        out_data = numpy.genfromtxt(output_file_MiRKAT, delimiter="\t")
+        p_values = out_data[:,0]
+        #print(p_values)
 
-    if len(is_DMR_array_simple) >= 2:
-        auc_simple = sklearn.metrics.roc_auc_score(is_DMR_array_simple, dist_mean_array_simple)
-        auc_simple_list.append(auc_simple)
-    else:
-        auc_simple = 'NA'
+        type_I_values = out_data[:,1]
+        type_II_values = out_data[:,2]
+        sensitivity_values = out_data[:,3]
+        specificity_values = out_data[:,4]
 
-    if len(is_DMR_array_moderate) >= 2:
-        auc_moderate = sklearn.metrics.roc_auc_score(is_DMR_array_moderate, dist_mean_array_moderate)
-        auc_moderate_list.append(auc_moderate)
-    else:
-        auc_moderate = 'NA'
-
-    if len(is_DMR_array_hard) >= 2:
-        auc_hard = sklearn.metrics.roc_auc_score(is_DMR_array_hard, dist_mean_array_hard)
-        auc_hard_list.append(auc_hard)
-    else:
-        auc_hard = 'NA'
-
-    with open(output_file_auc, 'a+') as outfile:
-        outfile.write(str(rep_size) + '\t'+ str(thr) + '\t' + str(DMR_change_param) + '\t' + str(replicate_change_param) + '\tALL\t')
-        if len(auc_all_list) > 0:
-            outfile.write(str(sum(auc_all_list)/len(auc_all_list)) + '\n')
-        else:
-            outfile.write('NA\n')
-
-        outfile.write(str(rep_size) + '\t' + str(thr) + '\t' + str(DMR_change_param) + '\t' + str(replicate_change_param) + '\tSIM\t')
-        if len(auc_simple_list) > 0:
-            outfile.write(str(sum(auc_simple_list)/len(auc_simple_list)) + '\n')
-        else:
-            outfile.write('NA\n')
-
-        outfile.write(str(rep_size) + '\t' + str(thr) + '\t' + str(DMR_change_param) + '\t' + str(replicate_change_param) + '\tMOD\t')
-        if len(auc_moderate_list) > 0:            
-            outfile.write(str(sum(auc_moderate_list)/len(auc_moderate_list)) + '\n')
-        else:
-            outfile.write('NA\n')
-
-        outfile.write(str(rep_size) + '\t' + str(thr) + '\t' + str(DMR_change_param) + '\t' + str(replicate_change_param) + '\tHAR\t') 
-        if len(auc_hard_list) > 0:              
-            outfile.write(str(sum(auc_hard_list)/len(auc_hard_list)) + '\n')
-        else:
-            outfile.write('NA\n')
+        with open(output_file, 'a+') as outfile:
+            outfile.write(str(sum(p_values)/len(p_values)) + '\t' + str(sum(type_I_values)/len(type_I_values)) + '\t' + str(sum(type_II_values)/len(type_II_values)) + '\t' + str(sum(sensitivity_values)/len(sensitivity_values)) + '\t' + str(sum(specificity_values)/len(specificity_values)) + '\n')
 
 
-    pvalue_data = numpy.genfromtxt(output_file_p_value, delimiter="\t")
-    pvalue_MiRKAT = pvalue_data[:,0]
-    #pvalue_MMiRKAT = pvalue_data[:,1]
-    #labels = 1 - pvalue_data[:,2]
+        '''with open(output_file_auc, 'a+') as outfile:
+            outfile.write(str(rep_size) + '\t'+ str(thr) + '\t' + str(DMR_change_param) + '\t' + str(replicate_change_param) + '\tALL\t')
+            if len(auc_all_list) > 0:
+                outfile.write(str(sum(auc_all_list)/len(auc_all_list)) + '\n')
+            else:
+                outfile.write('NA\n')
 
-    labels = 1 - pvalue_data[:,1]
-    significance_level = 0.02
-    auc_pvalue_MiRKAT = sklearn.metrics.roc_auc_score(labels, pvalue_MiRKAT)
-    #auc_pvalue_MMiRKAT = sklearn.metrics.roc_auc_score(labels, pvalue_MMiRKAT)
+            outfile.write(str(rep_size) + '\t' + str(thr) + '\t' + str(DMR_change_param) + '\t' + str(replicate_change_param) + '\tSIM\t')
+            if len(auc_simple_list) > 0:
+                outfile.write(str(sum(auc_simple_list)/len(auc_simple_list)) + '\n')
+            else:
+                outfile.write('NA\n')
 
-    total_number_of_regions = len(pvalue_MiRKAT)
-    type_I = 0
-    type_II = 0
-    for pval, lab  in zip(pvalue_MiRKAT, labels):
-        if pval <= significance_level and lab == 0:
-            type_I += 1
-        if pval > significance_level and lab == 1:
-            type_II +=1
-    type_I_error = float(type_I) / float(total_number_of_regions)
-    type_II_error = float(type_II) / float(total_number_of_regions)
+            outfile.write(str(rep_size) + '\t' + str(thr) + '\t' + str(DMR_change_param) + '\t' + str(replicate_change_param) + '\tMOD\t')
+            if len(auc_moderate_list) > 0:            
+                outfile.write(str(sum(auc_moderate_list)/len(auc_moderate_list)) + '\n')
+            else:
+                outfile.write('NA\n')
 
-    write_auc_pvalue_MiRKAT(auc_pvalue_MiRKAT, type_I_error, type_II_error, output_file_MiRKAT)
+            outfile.write(str(rep_size) + '\t' + str(thr) + '\t' + str(DMR_change_param) + '\t' + str(replicate_change_param) + '\tHAR\t') 
+            if len(auc_hard_list) > 0:              
+                outfile.write(str(sum(auc_hard_list)/len(auc_hard_list)) + '\n')
+            else:
+                outfile.write('NA\n')
+                '''
+
+
     
 
 
-def evaluate_param_effect(selectedPatterns, componentList,full_filename_sim, method, output_file_auc_eval):
+def evaluate_param_effect(selectedPatterns, componentList,full_filename_sim, method, output_file_auc_eval, output_file_p_value):
     random_iteration = 20
 
     thr_list = [0.15]
-    DMR_change_param_list = [0.6, 0.8]
-    replicate_change_param_list = [0.02, 0.04, 0.06, 0.08, 0.1]
+    DMR_change_param_list = [0.4, 0.6, 0.8]
+    replicate_change_param_list = [0.02, 0.04, 0.06, 0.1]
     #DMR_change_param_list = [0.8]
     #replicate_change_param_list = [0.02]
 
@@ -313,7 +473,6 @@ def evaluate_param_effect(selectedPatterns, componentList,full_filename_sim, met
                             normal_rep_pats, tumor_rep_pats, case = simulate(normalSelected, rep_size, is_DMR, thr, DMR_change_param, replicate_change_param)
 
                             
-
                             if method == 'MiRKAT':
                                 extended_dist_mat, id_array_b = compute_extended_distance_matrix_sim(normal_rep_pats, tumor_rep_pats, comp.start, comp.end)
                                 open(output_file_extended_dist_mat_single, 'w').close()
@@ -334,8 +493,9 @@ def evaluate_param_effect(selectedPatterns, componentList,full_filename_sim, met
 
                                 single_p_value = open(output_file_single_p_value, 'r').readline().rstrip()
 
-                                print("MiRKAT_p_ value = " + str(single_p_value))
+                                #print("MiRKAT_p_ value = " + str(single_p_value))
                                 score = 1 - float(single_p_value)
+                                #score = float(single_p_value)
 
                             elif method == 'ttest':
                                 extended_dist_mat, id_array_b = compute_extended_distance_matrix_sim(normal_rep_pats, tumor_rep_pats, comp.start, comp.end)
@@ -343,11 +503,20 @@ def evaluate_param_effect(selectedPatterns, componentList,full_filename_sim, met
 
                                 ttest_tscore, ttest_pvalue= stats.ttest_ind(n_n_array, n_t_array)
                                 #print("ttest_tscore = " + str(ttest_tscore))
-                                print("ttest_pvalue = " + str(2*ttest_pvalue))
+                                #print("ttest_pvalue = " + str(2*ttest_pvalue))
+                                
+                                '''nn_mean = numpy.mean(n_n_array)
+                                nn_sd = numpy.sd(n_n_array)
 
-                                #score = 1 - 2*ttest_pvalue
+                                nt_mean = numpy.mean(n_t_array)
+                                nt_sd = numpy.sd(n_t_array)
+
+                                tt_mean = numpy.mean(t_t_array)
+                                tt_sd = numpy.sd(t_t_array)'''
+
+                                score = 1 - 2*ttest_pvalue
                                 #score = abs(ttest_tscore)
-                                score = ttest_pvalue
+                                #score = ttest_pvalue
 
 
                             else:
@@ -399,31 +568,35 @@ def evaluate_param_effect(selectedPatterns, componentList,full_filename_sim, met
                                 outfile.write('-----------------\n')  
                                 outfile.write('-----------------\n')'''
                             
-                        print("len_all = " + str(len(is_DMR_array_all)))
-                        print("len_simple = " + str(len(is_DMR_array_simple)))
-                        print("len_moderate = " + str(len(is_DMR_array_moderate)))
-                        print("len_hard = " + str(len(is_DMR_array_hard)))
+                        #print("len_all = " + str(len(is_DMR_array_all)))
+                        #print("len_simple = " + str(len(is_DMR_array_simple)))
+                        #print("len_moderate = " + str(len(is_DMR_array_moderate)))
+                        #print("len_hard = " + str(len(is_DMR_array_hard)))
 
                         if len(is_DMR_array_all) >= 2:
                             auc_all = sklearn.metrics.roc_auc_score(is_DMR_array_all, dist_mean_array_all)
+                            #auc_all = sklearn.metrics.auc(is_DMR_array_all, dist_mean_array_all)
                             auc_all_list.append(auc_all)
                         else:
                             auc_all = 'NA'
 
                         if len(is_DMR_array_simple) >= 2:
                             auc_simple = sklearn.metrics.roc_auc_score(is_DMR_array_simple, dist_mean_array_simple)
+                            #auc_simple = sklearn.metrics.auc(is_DMR_array_simple, dist_mean_array_simple)
                             auc_simple_list.append(auc_simple)
                         else:
                             auc_simple = 'NA'
 
                         if len(is_DMR_array_moderate) >= 2:
                             auc_moderate = sklearn.metrics.roc_auc_score(is_DMR_array_moderate, dist_mean_array_moderate)
+                            #auc_moderate = sklearn.metrics.auc(is_DMR_array_moderate, dist_mean_array_moderate)
                             auc_moderate_list.append(auc_moderate)
                         else:
                             auc_moderate = 'NA'
 
                         if len(is_DMR_array_hard) >= 2:
                             auc_hard = sklearn.metrics.roc_auc_score(is_DMR_array_hard, dist_mean_array_hard)
+                            #auc_hard = sklearn.metrics.auc(is_DMR_array_hard, dist_mean_array_hard)
                             auc_hard_list.append(auc_hard)
                         else:
                             auc_hard = 'NA'
@@ -431,28 +604,34 @@ def evaluate_param_effect(selectedPatterns, componentList,full_filename_sim, met
                     with open(output_file_auc_eval, 'a+') as outfile:
                         outfile.write(str(rep_size) + '\t'+ str(thr) + '\t' + str(DMR_change_param) + '\t' + str(replicate_change_param) + '\tALL\t')
                         if len(auc_all_list) > 0:
-                            outfile.write(str(sum(auc_all_list)/len(auc_all_list)) + '\n')
+                            #outfile.write(str(sum(auc_all_list)/len(auc_all_list)) + '\n')
+                            outfile.write(str(numpy.mean(auc_all_list)) + '\t' + str(numpy.std(auc_all_list)) +'\n')
+
                         else:
                             outfile.write('NA\n')
 
                         outfile.write(str(rep_size) + '\t' + str(thr) + '\t' + str(DMR_change_param) + '\t' + str(replicate_change_param) + '\tSIM\t')
                         if len(auc_simple_list) > 0:
-                            outfile.write(str(sum(auc_simple_list)/len(auc_simple_list)) + '\n')
+                            outfile.write(str(numpy.mean(auc_simple_list)) + '\t' + str(numpy.std(auc_simple_list)) +'\n')                            
+                            #outfile.write(str(sum(auc_simple_list)/len(auc_simple_list)) + '\n')
                         else:
                             outfile.write('NA\n')
 
                         outfile.write(str(rep_size) + '\t' + str(thr) + '\t' + str(DMR_change_param) + '\t' + str(replicate_change_param) + '\tMOD\t')
-                        if len(auc_moderate_list) > 0:            
-                            outfile.write(str(sum(auc_moderate_list)/len(auc_moderate_list)) + '\n')
+                        if len(auc_moderate_list) > 0:  
+                            outfile.write(str(numpy.mean(auc_moderate_list)) + '\t' + str(numpy.std(auc_moderate_list)) +'\n')
+                            #outfile.write(str(sum(auc_moderate_list)/len(auc_moderate_list)) + '\n')
                         else:
                             outfile.write('NA\n')
 
                         outfile.write(str(rep_size) + '\t' + str(thr) + '\t' + str(DMR_change_param) + '\t' + str(replicate_change_param) + '\tHAR\t') 
                         if len(auc_hard_list) > 0:              
-                            outfile.write(str(sum(auc_hard_list)/len(auc_hard_list)) + '\n')
+                            #outfile.write(str(sum(auc_hard_list)/len(auc_hard_list)) + '\n')
+                            outfile.write(str(numpy.mean(auc_hard_list)) + '\t' + str(numpy.std(auc_hard_list)) +'\n')
                         else:
                             outfile.write('NA\n')
 
+                   
 
 
 
@@ -464,6 +643,7 @@ if __name__ == "__main__":
     inputFileDirNormal = result_args.inputfileDir1
     inputFileDirTumor = result_args.inputfileDir2
     method = result_args.method
+    output_file_dir = result_args.outputfileDir
     output_file_auc_eval = result_args.outputfileDir+'/auc_eval.txt'
     output_file_auc = result_args.outputfileDir+'/auc.txt'
     output_file = result_args.outputfileDir+'/final.txt'
@@ -500,27 +680,29 @@ if __name__ == "__main__":
 
 
     
-    print(result_args.start, result_args.end, result_args.step, inputFileDirNormal, inputFileDirTumor, output_file_distance, output_file_auc)
+    print(result_args.start, result_args.end, result_args.eval, inputFileDirNormal, inputFileDirTumor, output_file_distance, output_file_auc)
     run_type = result_args.run
-    eval_type = result_args.eval
 
     if run_type == 0:
         print("simulation start")
         fileN = open(inputFileDirNormal,'r')
         line = fileN.readline()
-        print(str(line).strip())
+        #print(str(line).strip())
         patterns = read_methyl_patterns(str(line).strip())
-        print(" patterns length = ", len(patterns))
+        #print(" patterns length = ", len(patterns))
         selectedPatterns = within_region_patterns(patterns, result_args.start, result_args.end)
-        print("selected pattern len = ", len(selectedPatterns))
+        #print("selected pattern len = ", len(selectedPatterns))
         componentList = getComponentList(selectedPatterns)
-        print(" comp list length = ", len(componentList))
+        #print(" comp list length = ", len(componentList))
+        eval_type = str2bool(result_args.eval)
 
         if eval_type == False:
+            print("eval_type = " , str(eval_type))
             patterns_2_p_values(selectedPatterns, componentList, full_filename_sim, output_file_info, output_file_health_status, output_file_p_value, output_file_extended_dist_mat, output_file_auc, output_file_MiRKAT)
 
         if eval_type == True:
-            evaluate_param_effect(selectedPatterns, componentList, full_filename_sim, method, output_file_auc_eval)
+            print("eval_type = " , str(eval_type))
+            evaluate_param_effect(selectedPatterns, componentList, full_filename_sim, method, output_file_auc_eval, output_file_p_value)
     
     else:
         overalCompList = find_overal_intersect(inputFileDirNormal, inputFileDirTumor, result_args.start, result_args.end)
@@ -556,8 +738,18 @@ if __name__ == "__main__":
             n_n_array, t_t_array, n_t_array = extended_dist_mat_2_distributions(extended_dist_mat, normal_rep_size, tumor_rep_size)
 
             ttest_tscore, ttest_pvalue= stats.ttest_ind(n_n_array, n_t_array)
+
+            nn_mean = numpy.mean(n_n_array)
+            nn_sd = numpy.sd(n_n_array)
+
+            nt_mean = numpy.mean(n_t_array)
+            nt_sd = numpy.sd(n_t_array)
+
+            tt_mean = numpy.mean(t_t_array)
+            tt_sd = numpy.sd(t_t_array)
+
             #print("ttest_tscore = " + str(ttest_tscore))
-            print("ttest_pvalue = " + str(2*ttest_pvalue))
+            #print("ttest_pvalue = " + str(2*ttest_pvalue))
 
             #score = 1 - 2*ttest_pvalue
             score = ttest_pvalue
